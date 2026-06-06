@@ -3,63 +3,47 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 
+	"github.com/yanking/go-tiny-claw/internal/config"
 	"github.com/yanking/go-tiny-claw/internal/engine"
 	"github.com/yanking/go-tiny-claw/internal/provider"
-	"github.com/yanking/go-tiny-claw/internal/schema"
+	"github.com/yanking/go-tiny-claw/internal/tools"
+	"github.com/yanking/go-tiny-claw/pkg/conf"
 )
 
-// 伪造的工具注册表 (用于测试 Provider 的工具提取能力)
-type mockRegistry struct{}
+var configFile string
 
-func (m *mockRegistry) GetAvailableTools() []schema.ToolDefinition {
-	return []schema.ToolDefinition{
-		{
-			Name:        "get_weather",
-			Description: "获取指定城市的当前天气情况。",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"city": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required": []string{"city"},
-			},
-		},
-	}
+func init() {
+	flag.StringVar(&configFile, "conf", "configs/config.yaml", "config path, eg: -conf config.yaml")
 }
-
-func (m *mockRegistry) Execute(ctx context.Context, call schema.ToolCall) schema.ToolResult {
-	log.Printf("  -> [Mock 工具执行] 获取 %s 的天气中...\n", call.Name)
-	return schema.ToolResult{
-		ToolCallID: call.ID,
-		Output:     "API 返回：今天是晴天，气温 25 度。",
-		IsError:    false,
-	}
-}
-
 func main() {
-	apiKey := os.Getenv("CLAW_API_KEY")
-	baseURL := os.Getenv("CLAW_BASE_URL")
-	model := os.Getenv("CLAW_MODEL")
-	if model == "" {
-		model = "glm-5.1"
-	}
+	flag.Parse()
 
-	if apiKey == "" {
-		log.Fatal("请设置环境变量 CLAW_API_KEY")
-	}
+	var c config.Config
+	conf.MustLoad(configFile, &c)
 
 	workDir, _ := os.Getwd()
-	llmProvider := provider.NewOpenAIProvider(apiKey, baseURL, model)
 
-	registry := &mockRegistry{}
+	var llmProvider provider.LLMProvider
+	switch c.LLM.Provider {
+	case "anthropic":
+		llmProvider = provider.NewClaudeProvider(c.LLM.APIKey, c.LLM.BaseURL, c.LLM.Model)
+	case "openai":
+	default:
+		llmProvider = provider.NewOpenAIProvider(c.LLM.APIKey, c.LLM.BaseURL, c.LLM.Model)
+	}
+
+	registry := tools.NewRegistry()
+	readFileTool := tools.NewReadFileTool(workDir)
+	registry.Register(readFileTool)
+
 	eng := engine.NewAgentEngine(llmProvider, registry, workDir, false)
 
-	prompt := "我想去北京跑步，帮我查查天气适合吗？"
+	// 设定测试任务
+	prompt := "当前工作区目录下 hello.txt 文件的内容是什么"
 
 	err := eng.Run(context.Background(), prompt)
 	if err != nil {

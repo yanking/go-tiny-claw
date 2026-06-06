@@ -37,13 +37,19 @@ func main() {
 	}
 
 	registry := tools.NewRegistry()
-	readFileTool := tools.NewReadFileTool(workDir)
-	registry.Register(readFileTool)
+	registry.Register(tools.NewReadFileTool(workDir))
+	registry.Register(tools.NewWriteFileTool(workDir))
+	registry.Register(tools.NewBashTool(workDir))
 
 	eng := engine.NewAgentEngine(llmProvider, registry, workDir, false)
 
 	// 设定测试任务
-	prompt := "当前工作区目录下 hello.txt 文件的内容是什么"
+	prompt := `
+请帮我执行以下操作： 
+1. 用 bash 查看一下我当前电脑的 Go 版本。 
+2. 帮我写一个简单的 helloworld.go 文件，输出 "Hello, go-tiny-claw!"。 
+3. 用 bash 编译并运行这个 go 文件，确认它能正常工作。
+`
 
 	err := eng.Run(context.Background(), prompt)
 	if err != nil {

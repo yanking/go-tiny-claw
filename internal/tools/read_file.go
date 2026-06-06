@@ -28,13 +28,13 @@ func (t *ReadFileTool) Name() string {
 func (t *ReadFileTool) Definition() schema.ToolDefinition {
 	return schema.ToolDefinition{
 		Name:        t.Name(),
-		Description: "读取指定路径的文件内容，请提供相对工作区的路径。",
+		Description: "Read a file from the workspace.",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"path": map[string]interface{}{
 					"type":        "string",
-					"description": "要读取的文件路径，如 cmd/claw/main.go",
+					"description": "File path relative to workspace",
 				},
 			},
 			"required": []string{"path"},
@@ -49,25 +49,43 @@ type readFileArgs struct {
 func (t *ReadFileTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var input readFileArgs
 	if err := json.Unmarshal(args, &input); err != nil {
-		return "", fmt.Errorf("参数解析失败： %w", err)
+		return "", fmt.Errorf("parse args: %w", err)
 	}
 
-	fullPath := filepath.Join(t.workDir, input.Path)
+	fullPath, err := safePath(t.workDir, input.Path)
+	if err != nil {
+		return "", err
+	}
+
 	file, err := os.Open(fullPath)
 	if err != nil {
-		return "", fmt.Errorf("无法打开文件：%w", err)
+		return "", fmt.Errorf("open file: %w", err)
 	}
 	defer file.Close()
 
 	content, err := io.ReadAll(file)
 	if err != nil {
-		return "", fmt.Errorf("无法读取文件内容：%w", err)
+		return "", fmt.Errorf("read file: %w", err)
 	}
 
 	const maxLen = 8000
 	if len(content) > maxLen {
-		return fmt.Sprintf("%s\n\n...", string(content[:maxLen])), nil
+		return string(content[:maxLen]) + "\n...(truncated)", nil
 	}
 
 	return string(content), nil
+}
+
+// safePath 解析并校验路径，防止 .. 越界访问工作区外的文件
+func safePath(workDir, relPath string) (string, error) {
+	abs := filepath.Clean(filepath.Join(workDir, relPath))
+	base := filepath.Clean(workDir)
+	rel, err := filepath.Rel(base, abs)
+	if err != nil {
+		return "", fmt.Errorf("path escapes workspace: %s", relPath)
+	}
+	if rel == ".." || len(rel) >= 3 && rel[:3] == "../" {
+		return "", fmt.Errorf("path escapes workspace: %s", relPath)
+	}
+	return abs, nil
 }

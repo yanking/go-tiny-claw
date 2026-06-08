@@ -27,6 +27,7 @@ func main() {
 	conf.MustLoad(configFile, &c)
 
 	workDir, _ := os.Getwd()
+	workDir += "/workspace"
 
 	var llmProvider provider.LLMProvider
 	switch c.LLM.Provider {
@@ -47,15 +48,12 @@ func main() {
 
 	// 构造 reporter
 	var r reporter.Reporter
-	if c.Telegram.Token != "" && c.Telegram.ChatID != "" {
-		r = reporter.NewTelegramBot(c.Telegram.Token, c.Telegram.ChatID)
-		log.Println("[main] Telegram reporter 已启用")
-	}
+	r = reporter.NewTerminalReporter()
 
 	// 设定测试任务
 	prompt := `
-我当前目录下有 a.txt, b.txt, c.txt 三个文件。 
-为了节省时间，请你同时一次性读取这三个文件，并将它们的内容综合起来，告诉我它们分别记录了什么领域的信息。
+我需要在当前目录下新建一个 ping.go，提供一个简单的 http ping 接口。 
+写完之后，帮我把代码用 git 提交一下。
 `
 
 	err := eng.Run(context.Background(), prompt, r)

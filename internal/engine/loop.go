@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	ctxpkg "github.com/yanking/go-tiny-claw/internal/context"
 	"github.com/yanking/go-tiny-claw/internal/provider"
 	"github.com/yanking/go-tiny-claw/internal/reporter"
 	"github.com/yanking/go-tiny-claw/internal/schema"
@@ -18,6 +19,7 @@ type AgentEngine struct {
 	registry       tools.Registry
 	WorkDir        string
 	EnableThinking bool
+	composer       *ctxpkg.PromptComposer
 }
 
 func NewAgentEngine(provider provider.LLMProvider, registry tools.Registry, workDir string, enableThinking bool) *AgentEngine {
@@ -26,21 +28,18 @@ func NewAgentEngine(provider provider.LLMProvider, registry tools.Registry, work
 		registry:       registry,
 		WorkDir:        workDir,
 		EnableThinking: enableThinking,
+		composer:       ctxpkg.NewPromptComposer(workDir),
 	}
 }
 
 func (e *AgentEngine) Run(ctx context.Context, userPrompt string, reporter reporter.Reporter) error {
 	log.Printf("[engine] 引擎启动，锁定工作区: %s\n", e.WorkDir)
 	log.Printf("[engine] Thinking Phase %v\n", e.EnableThinking)
+
+	systemMsg := e.composer.Build()
 	contextHistory := []schema.Message{
-		{
-			Role:    schema.RoleSystem,
-			Content: "You are go-tiny-claw, an expert coding assistant. You have full access to tools in the workspace.",
-		},
-		{
-			Role:    schema.RoleUser,
-			Content: userPrompt,
-		},
+		systemMsg,
+		{Role: schema.RoleUser, Content: userPrompt},
 	}
 
 	turn := 0

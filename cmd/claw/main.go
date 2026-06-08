@@ -10,6 +10,7 @@ import (
 	"github.com/yanking/go-tiny-claw/internal/config"
 	"github.com/yanking/go-tiny-claw/internal/engine"
 	"github.com/yanking/go-tiny-claw/internal/provider"
+	"github.com/yanking/go-tiny-claw/internal/reporter"
 	"github.com/yanking/go-tiny-claw/internal/tools"
 	"github.com/yanking/go-tiny-claw/pkg/conf"
 )
@@ -44,13 +45,20 @@ func main() {
 
 	eng := engine.NewAgentEngine(llmProvider, registry, workDir, true)
 
+	// 构造 reporter
+	var r reporter.Reporter
+	if c.Telegram.Token != "" && c.Telegram.ChatID != "" {
+		r = reporter.NewTelegramBot(c.Telegram.Token, c.Telegram.ChatID)
+		log.Println("[main] Telegram reporter 已启用")
+	}
+
 	// 设定测试任务
 	prompt := `
 我当前目录下有 a.txt, b.txt, c.txt 三个文件。 
 为了节省时间，请你同时一次性读取这三个文件，并将它们的内容综合起来，告诉我它们分别记录了什么领域的信息。
 `
 
-	err := eng.Run(context.Background(), prompt)
+	err := eng.Run(context.Background(), prompt, r)
 	if err != nil {
 		log.Fatalf("引擎运行崩溃: %v", err)
 	}

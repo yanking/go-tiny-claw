@@ -1,7 +1,8 @@
 package config
 
 type Config struct {
-	LLM LLM `mapstructure:"llm"`
+	LLM      LLM      `mapstructure:"llm"`
+	Telegram Telegram `mapstructure:"telegram"`
 }
 
 type LLM struct {
@@ -9,4 +10,9 @@ type LLM struct {
 	Model    string `mapstructure:"model"`
 	APIKey   string `mapstructure:"api_key"`
 	BaseURL  string `mapstructure:"base_url"`
+}
+
+type Telegram struct {
+	Token  string `mapstructure:"token"`
+	ChatID string `mapstructure:"chat_id"`
 }

@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 // TelegramBot 封装 Telegram Bot API 的 HTTP 调用
@@ -53,7 +55,8 @@ func (b *TelegramBot) sendText(text string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram api returned status %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram api status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 	return nil
 }
@@ -77,7 +80,7 @@ func truncate(text string, maxLen int) string {
 // OnThinking 发送思考中状态消息
 func (b *TelegramBot) OnThinking(ctx context.Context) {
 	_ = ctx
-	text := "🧠 _思考中\\.\\.\\_"
+	text := "🧠 思考中\\.\\.\\."
 	if err := b.sendText(text); err != nil {
 		log.Printf("[telegram] OnThinking 发送失败: %v", err)
 	}

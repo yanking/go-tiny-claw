@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/yanking/go-tiny-claw/internal/provider"
+	"github.com/yanking/go-tiny-claw/internal/reporter"
 	"github.com/yanking/go-tiny-claw/internal/schema"
 	"github.com/yanking/go-tiny-claw/internal/tools"
 )
@@ -28,7 +29,7 @@ func NewAgentEngine(provider provider.LLMProvider, registry tools.Registry, work
 	}
 }
 
-func (e *AgentEngine) Run(ctx context.Context, userPrompt string) error {
+func (e *AgentEngine) Run(ctx context.Context, userPrompt string, reporter reporter.Reporter) error {
 	log.Printf("[engine] 引擎启动，锁定工作区: %s\n", e.WorkDir)
 	log.Printf("[engine] Thinking Phase %v\n", e.EnableThinking)
 	contextHistory := []schema.Message{
@@ -49,7 +50,9 @@ func (e *AgentEngine) Run(ctx context.Context, userPrompt string) error {
 		availableTools := e.registry.GetAvailableTools()
 
 		if e.EnableThinking {
-			log.Printf("[engine] thinking...")
+			if reporter != nil {
+				reporter.OnThinking(ctx)
+			}
 			thinkResp, err := e.provider.Generate(ctx, contextHistory, nil)
 			if err != nil {
 				return fmt.Errorf("[engine] thinking : %w", err)
@@ -66,13 +69,12 @@ func (e *AgentEngine) Run(ctx context.Context, userPrompt string) error {
 		}
 
 		contextHistory = append(contextHistory, *responseMsg)
-		if responseMsg.Content != "" {
-			fmt.Printf("🧠: %s\n", responseMsg.Content)
+		if responseMsg.Content != "" && reporter != nil {
+			reporter.OnMessage(ctx, responseMsg.Content)
 		}
 
 		// 如果模型没有请求任何工具调用，说明它认为任务已经完成，跳出循环。
 		if len(responseMsg.ToolCalls) == 0 {
-			log.Println("[engine] 任务完成，退出循环")
 			break
 		}
 
@@ -83,12 +85,12 @@ func (e *AgentEngine) Run(ctx context.Context, userPrompt string) error {
 			wg.Add(1)
 			go func(idx int, toolCall schema.ToolCall) {
 				defer wg.Done()
-				log.Printf("  -> ⚙ 执行工具: %s 参数： %s\n", toolCall.Name, string(toolCall.Arguments))
+				if reporter != nil {
+					reporter.OnToolCall(ctx, toolCall.Name, string(toolCall.Arguments))
+				}
 				result := e.registry.Execute(ctx, toolCall)
-				if result.IsError {
-					log.Printf("  -> ❌ 工具执行报错: %s\n", result.Output)
-				} else {
-					log.Printf("  -> ✅ 工具执行成功: 返回 %d 字节\n", len(result.Output))
+				if reporter != nil {
+					reporter.OnToolResult(ctx, toolCall.Name, result.Output, result.IsError)
 				}
 
 				observationMsgs[idx] = schema.Message{

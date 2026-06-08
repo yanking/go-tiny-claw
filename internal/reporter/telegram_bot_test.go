@@ -119,7 +119,7 @@ func TestOnThinking(t *testing.T) {
 	})
 
 	bot.OnThinking(context.Background())
-	if gotText != "🧠 _思考中\\.\\.\\_" {
+	if gotText != "🧠 思考中\\.\\.\\." {
 		t.Errorf("OnThinking text = %q", gotText)
 	}
 }

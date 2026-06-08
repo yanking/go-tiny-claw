@@ -2,8 +2,10 @@ package reporter
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 )
@@ -70,4 +72,46 @@ func truncate(text string, maxLen int) string {
 		return text
 	}
 	return text[:maxLen] + "\n...(truncated)"
+}
+
+// OnThinking 发送思考中状态消息
+func (b *TelegramBot) OnThinking(ctx context.Context) {
+	_ = ctx
+	text := "🧠 _思考中\\.\\.\\_"
+	if err := b.sendText(text); err != nil {
+		log.Printf("[telegram] OnThinking 发送失败: %v", err)
+	}
+}
+
+// OnToolCall 发送工具调用消息
+func (b *TelegramBot) OnToolCall(ctx context.Context, toolName string, args string) {
+	_ = ctx
+	escaped := escapeMarkdownV2(truncate(args, 200))
+	text := fmt.Sprintf("⚙ *调用工具:* `%s`\n```\n%s\n```", escapeMarkdownV2(toolName), escaped)
+	if err := b.sendText(text); err != nil {
+		log.Printf("[telegram] OnToolCall 发送失败: %v", err)
+	}
+}
+
+// OnToolResult 发送工具执行结果消息
+func (b *TelegramBot) OnToolResult(ctx context.Context, toolName string, result string, isError bool) {
+	_ = ctx
+	icon := "✅"
+	if isError {
+		icon = "❌"
+	}
+	escaped := escapeMarkdownV2(truncate(result, 1000))
+	text := fmt.Sprintf("%s *%s 结果:*\n```\n%s\n```", icon, escapeMarkdownV2(toolName), escaped)
+	if err := b.sendText(text); err != nil {
+		log.Printf("[telegram] OnToolResult 发送失败: %v", err)
+	}
+}
+
+// OnMessage 发送普通消息
+func (b *TelegramBot) OnMessage(ctx context.Context, content string) {
+	_ = ctx
+	text := "💬 " + escapeMarkdownV2(truncate(content, 4000))
+	if err := b.sendText(text); err != nil {
+		log.Printf("[telegram] OnMessage 发送失败: %v", err)
+	}
 }

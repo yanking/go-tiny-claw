@@ -1,6 +1,8 @@
 package reporter
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -105,4 +107,88 @@ func TestTruncate(t *testing.T) {
 	if len(got) < 50 {
 		t.Errorf("truncate long len = %d, should keep first 50", len(got))
 	}
+}
+
+func TestOnThinking(t *testing.T) {
+	var gotText string
+	bot, _ := captureRequest(t, func(w http.ResponseWriter, r *http.Request) {
+		body := parseSendMessageBody(t, r)
+		gotText = body["text"].(string)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+
+	bot.OnThinking(context.Background())
+	if gotText != "🧠 _思考中\\.\\.\\_" {
+		t.Errorf("OnThinking text = %q", gotText)
+	}
+}
+
+func TestOnToolCall(t *testing.T) {
+	var gotText string
+	bot, _ := captureRequest(t, func(w http.ResponseWriter, r *http.Request) {
+		body := parseSendMessageBody(t, r)
+		gotText = body["text"].(string)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+
+	bot.OnToolCall(context.Background(), "read_file", `{"path":"a.txt"}`)
+	// 应包含转义后的工具名
+	if !bytes.Contains([]byte(gotText), []byte("read\\_file")) {
+		t.Errorf("OnToolCall text missing tool name: %q", gotText)
+	}
+}
+
+func TestOnToolResult(t *testing.T) {
+	var gotText string
+	bot, _ := captureRequest(t, func(w http.ResponseWriter, r *http.Request) {
+		body := parseSendMessageBody(t, r)
+		gotText = body["text"].(string)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+
+	// 成功结果
+	bot.OnToolResult(context.Background(), "read_file", "file content here", false)
+	if !bytes.Contains([]byte(gotText), []byte("✅")) {
+		t.Errorf("OnToolResult success text missing checkmark: %q", gotText)
+	}
+
+	// 错误结果
+	var gotText2 string
+	bot2, _ := captureRequest(t, func(w http.ResponseWriter, r *http.Request) {
+		body := parseSendMessageBody(t, r)
+		gotText2 = body["text"].(string)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+
+	bot2.OnToolResult(context.Background(), "bash", "command not found", true)
+	if !bytes.Contains([]byte(gotText2), []byte("❌")) {
+		t.Errorf("OnToolResult error text missing X: %q", gotText2)
+	}
+}
+
+func TestOnMessage(t *testing.T) {
+	var gotText string
+	bot, _ := captureRequest(t, func(w http.ResponseWriter, r *http.Request) {
+		body := parseSendMessageBody(t, r)
+		gotText = body["text"].(string)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+
+	bot.OnMessage(context.Background(), "任务完成！")
+	if !bytes.Contains([]byte(gotText), []byte("任务完成")) {
+		t.Errorf("OnMessage text missing content: %q", gotText)
+	}
+}
+
+func TestSendFailureDoesNotPanic(t *testing.T) {
+	bot, _ := captureRequest(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	// 只要不 panic 就行
+	bot.OnMessage(context.Background(), "test")
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 )
 
 // TelegramBot 封装 Telegram Bot API 的 HTTP 调用
@@ -53,4 +54,20 @@ func (b *TelegramBot) sendText(text string) error {
 		return fmt.Errorf("telegram api returned status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// markdownV2Specials 匹配需要转义的字符
+var markdownV2Specials = regexp.MustCompile(`([_*\[\]()~` + "`" + `>#\+\-=|{}.!\\])`)
+
+// escapeMarkdownV2 将文本中的 MarkdownV2 特殊字符进行转义
+func escapeMarkdownV2(text string) string {
+	return markdownV2Specials.ReplaceAllString(text, `\$1`)
+}
+
+// truncate 将文本截断到指定长度，超出时追加省略号
+func truncate(text string, maxLen int) string {
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen] + "\n...(truncated)"
 }

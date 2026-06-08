@@ -63,3 +63,46 @@ func TestSendTextMessage(t *testing.T) {
 		t.Errorf("parse_mode = %v, want MarkdownV2", gotBody["parse_mode"])
 	}
 }
+
+func TestEscapeMarkdownV2(t *testing.T) {
+	tests := []struct {
+		input  string
+		expect string
+	}{
+		{"hello", "hello"},
+		{"hello_world", "hello\\_world"},
+		{"a*b[c]d", "a\\*b\\[c\\]d"},
+		{"a(b)c`d", "a\\(b\\)c\\`d"},
+		{"a~b>c#d", "a\\~b\\>c\\#d"},
+		{"a+b-d=e", "a\\+b\\-d\\=e"},
+		{"a|b{c}d", "a\\|b\\{c\\}d"},
+		{"a.b!d", "a\\.b\\!d"},
+		{`a\b`, `a\\b`},
+	}
+	for _, tt := range tests {
+		got := escapeMarkdownV2(tt.input)
+		if got != tt.expect {
+			t.Errorf("escapeMarkdownV2(%q) = %q, want %q", tt.input, got, tt.expect)
+		}
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	// 短内容不截断
+	if got := truncate("abc", 10); got != "abc" {
+		t.Errorf("truncate short = %q, want %q", got, "abc")
+	}
+	// 长内容截断并追加省略号
+	longBytes := make([]byte, 100)
+	for i := range longBytes {
+		longBytes[i] = 'x'
+	}
+	long := string(longBytes)
+	got := truncate(long, 50)
+	if len(got) > 65 { // 50 + "\n...(truncated)" 长度
+		t.Errorf("truncate long len = %d, too long", len(got))
+	}
+	if len(got) < 50 {
+		t.Errorf("truncate long len = %d, should keep first 50", len(got))
+	}
+}
